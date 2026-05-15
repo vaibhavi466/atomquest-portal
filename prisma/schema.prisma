@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────
+
+enum Role {
+  EMPLOYEE
+  MANAGER
+  ADMIN
+}
+
+enum UoMType {
+  MIN
+  MAX
+  TIMELINE
+  ZERO
+}
+
+enum GoalStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  RETURNED
+  LOCKED
+}
+
+enum CheckinStatus {
+  NOT_STARTED
+  ON_TRACK
+  COMPLETED
+}
+
+enum Quarter {
+  Q1
+  Q2
+  Q3
+  Q4
+  ANNUAL
+}
+
+// ─── Models ──────────────────────────────────────────────
+
+model User {
+  id         String   @id @default(cuid())
+  name       String
+  email      String   @unique
+  password   String
+  role       Role     @default(EMPLOYEE)
+  department String?
+
+  // Self-referential: employee reports to manager
+  managerId  String?
+  manager    User?    @relation("Reports", fields: [managerId], references: [id])
+  reports    User[]   @relation("Reports")
+
+  goals      Goal[]
+  checkins   Checkin[]
+  auditLogs  AuditLog[]
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Goal {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  thrustArea   String
+  title        String
+  description  String?
+  uomType      UoMType
+  target       Float
+  weightage    Float
+  status       GoalStatus @default(DRAFT)
+
+  // Shared goals
+  isShared     Boolean    @default(false)
+  sharedFromId String?    // ID of the original goal this was pushed from
+
+  checkins     Checkin[]
+  auditLogs    AuditLog[]
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Checkin {
+  id             String        @id @default(cuid())
+  goalId         String
+  goal           Goal          @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User          @relation(fields: [userId], references: [id])
+
+  quarter        Quarter
+  actual         Float?
+  completionDate DateTime?     // For TIMELINE UoM type
+  status         CheckinStatus @default(NOT_STARTED)
+  managerComment String?
+  score          Float?        // System-computed, stored for history
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([goalId, quarter])  // One checkin per goal per quarter
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  goalId      String
+  goal        Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  changedById String
+  changedBy   User     @relation(fields: [changedById], references: [id])
+  field       String
+  oldValue    String
+  newValue    String
+  reason      String?
+  createdAt   DateTime @default(now())
+}
+
+model Cycle {
+  id          String   @id @default(cuid())
+  name        String   // e.g. "2025-26 Annual Cycle"
+  year        Int
+  goalOpenDate   DateTime
+  goalCloseDate  DateTime
+  q1Start     DateTime
+  q2Start     DateTime
+  q3Start     DateTime
+  q4Start     DateTime
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
