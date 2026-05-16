@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type SyntheticEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -34,6 +34,7 @@ interface GoalFormProps {
     uomType: string
     target: number
     weightage: number
+    isShared?: boolean
   }
   remainingWeightage: number
   onSubmit: (data: any) => Promise<void>
@@ -48,6 +49,9 @@ export function GoalForm({
   onCancel,
   isLoading,
 }: GoalFormProps) {
+  const isEditMode = Boolean(initialData?.id)
+  const isSharedGoal = Boolean(initialData?.isShared)
+
   const [form, setForm] = useState({
     thrustArea: initialData?.thrustArea || "",
     title: initialData?.title || "",
@@ -64,32 +68,62 @@ export function GoalForm({
     if (!form.thrustArea) e.thrustArea = "Required"
     if (!form.title.trim()) e.title = "Required"
     if (!form.uomType) e.uomType = "Required"
+
     if (form.target === "" || Number.isNaN(Number(form.target))) e.target = "Enter a valid number"
-    if (!form.weightage || isNaN(Number(form.weightage))) {
+    
+    if (form.uomType === "ZERO" && Number(form.target) !== 0) {
+      e.target = "ZERO type goals must have target 0"
+    }
+    
+    if (form.weightage === "" || Number.isNaN(Number(form.weightage)))  {
       e.weightage = "Required"
     } else if (Number(form.weightage) < 10) {
       e.weightage = "Minimum 10% required"
     } else if (Number(form.weightage) > 100) {
       e.weightage = "Cannot exceed 100%"
+    } else if (Number(form.weightage) > remainingWeightage) {
+      // CHANGE: Prevent employee from entering more than available remaining weightage
+      e.weightage = `Cannot exceed remaining ${remainingWeightage.toFixed(1)}%`
     }
     setErrors(e)
     return Object.keys(e).length === 0
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: SyntheticEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!validate()) return
+
+    if (isSharedGoal) {
+      await onSubmit({
+        weightage: form.weightage,
+      })
+      return
+    }
+
     await onSubmit(form)
   }
 
   const uomInfo = UOM_LABELS[form.uomType]
+  const lockedFieldClass = isSharedGoal
+    ? "bg-slate-100 text-slate-500 cursor-not-allowed opacity-80"
+    : ""
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      {isSharedGoal && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+          <p className="text-xs text-blue-700">
+            This is a shared goal pushed by your manager. Goal details and target
+            are locked. You can only update the weightage.
+          </p>
+        </div>
+      )}
+
       {/* Thrust Area */}
       <div className="space-y-1.5">
         <Label>Thrust Area <span className="text-red-500">*</span></Label>
-        <Select value={form.thrustArea} onValueChange={(v) => setForm({ ...form, thrustArea: v ?? "" })}>
+
+        <Select value={form.thrustArea} disabled={isSharedGoal} onValueChange={(v) => setForm({ ...form, thrustArea: v ?? "" })}>
           <SelectTrigger className={errors.thrustArea ? "border-red-400" : ""}>
             <SelectValue placeholder="Select thrust area" />
           </SelectTrigger>
@@ -108,6 +142,7 @@ export function GoalForm({
         <Input
           placeholder="e.g. Achieve ₹50L in Q1 sales"
           value={form.title}
+          disabled={isSharedGoal}
           onChange={(e) => setForm({ ...form, title: e.target.value })}
           className={errors.title ? "border-red-400" : ""}
         />
@@ -120,6 +155,7 @@ export function GoalForm({
         <Textarea
           placeholder="Additional context for this goal..."
           value={form.description}
+          disabled={isSharedGoal}
           onChange={(e) => setForm({ ...form, description: e.target.value })}
           rows={2}
         />
@@ -130,6 +166,7 @@ export function GoalForm({
         <Label>Unit of Measurement Type <span className="text-red-500">*</span></Label>
         <Select
           value={form.uomType}
+          disabled={isSharedGoal}
           onValueChange={(v) =>
             setForm({
               ...form,
@@ -160,7 +197,7 @@ export function GoalForm({
           type="number"
           placeholder={form.uomType === "ZERO" ? "0" : "Enter target"}
           value={form.target}
-          readOnly={form.uomType === "ZERO"}
+          disabled={isSharedGoal || form.uomType === "ZERO"}
           onChange={(e) => setForm({ ...form, target: e.target.value })}
           className={errors.target ? "border-red-400" : ""}
         />
@@ -176,13 +213,16 @@ export function GoalForm({
           Weightage (%)
           <span className="text-red-500">*</span>
           <span className="text-xs text-slate-400 font-normal ml-2">
-            (remaining: {remainingWeightage.toFixed(1)}%)
+            (max allowed: {remainingWeightage.toFixed(1)}%)
           </span>
         </Label>
+
+        
+        {/* Only editable field for shared goals */}
         <Input
           type="number"
           min={10}
-          max={100}
+          max={remainingWeightage}
           step={5}
           placeholder="Min 10%"
           value={form.weightage}

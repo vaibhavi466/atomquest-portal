@@ -34,6 +34,70 @@ export async function PATCH(
     }
 
     const body = await req.json()
+    // IMPORTANT: Shared goals can update ONLY weightage
+    if (goal.isShared) {
+      const weightage = Number(body.weightage)
+
+      if (Number.isNaN(weightage)) {
+        return NextResponse.json(
+          { error: "Weightage must be a valid number" },
+          { status: 400 }
+        )
+      }
+
+      if (weightage < 10 || weightage > 100) {
+        return NextResponse.json(
+          { error: "Weightage must be between 10 and 100" },
+          { status: 400 }
+        )
+      }
+      // CHANGE: Calculate total weightage of other editable goals.
+      // This prevents employee from exceeding total 100% by editing shared goal weightage.
+      const otherEditableGoals = await prisma.goal.findMany({
+          where: {
+            userId,
+            id: {
+              not: id,
+            },
+            status: {
+              in: [GoalStatus.DRAFT, GoalStatus.RETURNED],
+            },
+          },
+          select: {
+            weightage: true,
+          },
+        }
+      )
+
+        const otherWeightageTotal = otherEditableGoals.reduce(
+          (sum, goal) => sum + goal.weightage,
+          0
+        )
+
+        const maxAllowedWeightage = 100 - otherWeightageTotal
+
+        if (weightage > maxAllowedWeightage) {
+          return NextResponse.json(
+            {
+              error: `Weightage cannot exceed ${maxAllowedWeightage.toFixed(
+                1
+              )}% for this goal.`,
+            },
+            { status: 400 }
+          )
+        }
+
+      const updated = await prisma.goal.update({
+        where: { id },
+        data: {
+          weightage,
+        },
+      })
+
+      return NextResponse.json(updated)
+    }
+
+    // Normal employee-created goals can update all fields
     const thrustArea = body.thrustArea
     const title = body.title
     const description = body.description || null
@@ -54,6 +118,40 @@ export async function PATCH(
 
     const target = Number(targetValue)
     const weightage = Number(weightageValue)
+
+    // CHANGE: Validate total editable goal weightage during normal goal edit.
+      const otherEditableGoals = await prisma.goal.findMany({
+        where: {
+          userId,
+          id: {
+            not: id,
+          },
+          status: {
+            in: [GoalStatus.DRAFT, GoalStatus.RETURNED],
+          },
+        },
+        select: {
+          weightage: true,
+        },
+      })
+
+      const otherWeightageTotal = otherEditableGoals.reduce(
+        (sum, goal) => sum + goal.weightage,
+        0
+      )
+
+      const maxAllowedWeightage = 100 - otherWeightageTotal
+
+      if (weightage > maxAllowedWeightage) {
+        return NextResponse.json(
+          {
+            error: `Weightage cannot exceed ${maxAllowedWeightage.toFixed(
+              1
+            )}% for this goal.`,
+          },
+          { status: 400 }
+        )
+      }
 
     if(Number.isNaN(target) || Number.isNaN(weightage)) {
       return NextResponse.json({ error: "Target and weightage must be valid numbers" }, { status: 400 })
