@@ -11,6 +11,7 @@ import {
   Shield,
   LogOut,
   ScrollText,
+  LineChart,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -21,8 +22,10 @@ const navItems = [
   { href: "/admin/dashboard",  label: "Dashboard",       icon: LayoutDashboard  },
   { href: "/admin/users",      label: "User Management", icon: Users            },
   { href: "/admin/reports",    label: "Reports",         icon: BarChart2        },
+  { href: "/admin/analytics",  label: "Analytics",       icon: LineChart },
   { href: "/admin/export",     label: "Export Data",     icon: FileSpreadsheet  },
   { href: "/admin/audit",      label: "Audit Trail",     icon: ScrollText       },
+  
 ]
 
 export function AdminSidebar() {

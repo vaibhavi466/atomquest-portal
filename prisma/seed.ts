@@ -168,6 +168,90 @@ async function main() {
     ],
   })
 
+  // Add Q2 and Q3 check-ins for richer analytics charts
+  const allGoals = await prisma.goal.findMany({
+    where: { userId: employee.id, status: GoalStatus.LOCKED },
+  })
+
+  const goal1Locked = allGoals.find((g) => g.title === "Achieve Sales Target Q1")
+  const goal2Locked = allGoals.find((g) => g.title === "Improve Customer Retention Rate")
+  const goal3Locked = allGoals.find((g) => g.title === "Reduce TAT for Proposals")
+  const goal4Locked = allGoals.find((g) => g.title === "Zero Safety Incidents")
+
+  if (goal2Locked) {
+    await prisma.checkin.upsert({
+      where: { goalId_quarter: { goalId: goal2Locked.id, quarter: Quarter.Q1 } },
+      update: {},
+      create: {
+        goalId: goal2Locked.id,
+        userId: employee.id,
+        quarter: Quarter.Q1,
+        actual: 88,
+        status: CheckinStatus.ON_TRACK,
+        score: 97.8,
+        managerComment: "Very close to target. Keep it up.",
+      },
+    })
+
+    await prisma.checkin.upsert({
+      where: { goalId_quarter: { goalId: goal2Locked.id, quarter: Quarter.Q2 } },
+      update: {},
+      create: {
+        goalId: goal2Locked.id,
+        userId: employee.id,
+        quarter: Quarter.Q2,
+        actual: 91,
+        status: CheckinStatus.COMPLETED,
+        score: 100,
+      },
+    })
+  }
+
+  if (goal3Locked) {
+    await prisma.checkin.upsert({
+      where: { goalId_quarter: { goalId: goal3Locked.id, quarter: Quarter.Q1 } },
+      update: {},
+      create: {
+        goalId: goal3Locked.id,
+        userId: employee.id,
+        quarter: Quarter.Q1,
+        actual: 36,
+        status: CheckinStatus.ON_TRACK,
+        score: 100,
+        managerComment: "Excellent — well below the 48hr target.",
+      },
+    })
+  }
+
+  if (goal4Locked) {
+    await prisma.checkin.upsert({
+      where: { goalId_quarter: { goalId: goal4Locked.id, quarter: Quarter.Q1 } },
+      update: {},
+      create: {
+        goalId: goal4Locked.id,
+        userId: employee.id,
+        quarter: Quarter.Q1,
+        actual: 0,
+        status: CheckinStatus.COMPLETED,
+        score: 100,
+      },
+    })
+
+    await prisma.checkin.upsert({
+      where: { goalId_quarter: { goalId: goal4Locked.id, quarter: Quarter.Q2 } },
+      update: {},
+      create: {
+        goalId: goal4Locked.id,
+        userId: employee.id,
+        quarter: Quarter.Q2,
+        actual: 0,
+        status: CheckinStatus.COMPLETED,
+        score: 100,
+      },
+    })
+  }
+
+
   console.log("✅ Seeding complete!")
   console.log("\n📋 Demo Credentials:")
   console.log("  Employee → employee@demo.com / Demo@123")
