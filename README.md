@@ -239,4 +239,4 @@ GoalTrack is designed to be cost-efficient for hackathon and early-stage deploym
 
 ## 11. Project Summary
 
-GoalTrack directly addresses the AtomQuest requirement for a structured, reliable, audit-ready goal setting and tracking portal. It supports the complete lifecycle from employee goal drafting to manager approval, quarterly check-ins, admin reporting, and governance.
+GoalTrack directly addresses the AtomQuest requirement for a structured, reliable, audit-ready goal setting and tracking portal. It supports the complete lifecycle from employee goal drafting to manager approval, quarterly check-ins, admin reporting and governance.
