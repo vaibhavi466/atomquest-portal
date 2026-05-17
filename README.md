@@ -10,11 +10,9 @@ GoalTrack is a role-based web portal that digitizes the complete employee goal l
 
 | Item | Link |
 |---|---|
-| Live Demo | `TO_BE_ADDED: https://<your-vercel-app>.vercel.app` |
-| Source Code | `TO_BE_ADDED: https://github.com/<username>/<repo>` |
+| Live Demo | `atomquest-portal-lac.vercel.app` |
+| Source Code | `https://github.com/vaibhavi466/atomquest-portal.git` |
 | Architecture Diagram | Included below |
-
-> Replace the placeholder links before final hackathon submission.
 
 ---
 
@@ -227,28 +225,7 @@ Before deploying:
 
 ---
 
-## 10. Final QA Checklist
-
-- [ ] Employee login works.
-- [ ] Manager login works.
-- [ ] Admin login works.
-- [ ] Employee cannot submit goals unless editable weightage equals 100%.
-- [ ] Employee cannot create more than 8 editable goals.
-- [ ] Minimum goal weightage validation works.
-- [ ] Manager can approve goals.
-- [ ] Manager can return goals with reason.
-- [ ] Approved goals are locked for employees.
-- [ ] Shared goal title/target/UoM are read-only for employees.
-- [ ] Employee can update only shared goal weightage.
-- [ ] Employee can save quarterly check-ins.
-- [ ] Manager can save check-in comments.
-- [ ] Admin can edit users and hierarchy.
-- [ ] Reports page loads without runtime errors.
-- [ ] `.env` is not committed.
-
----
-
-## 11. Cost Optimization
+## 10. Cost Optimization
 
 GoalTrack is designed to be cost-efficient for hackathon and early-stage deployment:
 
@@ -260,6 +237,6 @@ GoalTrack is designed to be cost-efficient for hackathon and early-stage deploym
 
 ---
 
-## 12. Project Summary
+## 11. Project Summary
 
 GoalTrack directly addresses the AtomQuest requirement for a structured, reliable, audit-ready goal setting and tracking portal. It supports the complete lifecycle from employee goal drafting to manager approval, quarterly check-ins, admin reporting, and governance.
