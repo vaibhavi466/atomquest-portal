@@ -18,9 +18,9 @@ function calculateCheckinScore({
   completionDate,
 }: {
   uomType: UoMType
-  target: number | null
+  target?: number | null
+  deadline?: string | Date | null
   actual: number | null
-  deadline?: Date | null
   completionDate?: Date | null
 }) {
   if (uomType === UoMType.TIMELINE) {

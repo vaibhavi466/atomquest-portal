@@ -48,9 +48,9 @@ export function getRemainingWeightage(goals: GoalInput[], excludeIndex?: number)
 
 export function calculateScore(
   uomType: string,
-  target: number | null,
   actual: number | null,
-  deadline?: Date | null,
+  target?: number | null,
+  deadline?: string | Date | null,
   completionDate?: Date | null
 ): number {
   if (uomType === "TIMELINE") {

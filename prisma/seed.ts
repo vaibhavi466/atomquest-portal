@@ -1,6 +1,12 @@
-import { PrismaClient, Role, UoMType, GoalStatus, CheckinStatus, Quarter } from "@prisma/client"
+import {
+  PrismaClient,
+  Role,
+  UoMType,
+  GoalStatus,
+  CheckinStatus,
+  Quarter,
+} from "@prisma/client"
 import bcrypt from "bcryptjs"
-
 
 const prisma = new PrismaClient()
 
@@ -9,10 +15,20 @@ async function main() {
 
   const password = await bcrypt.hash("Demo@123", 12)
 
-  // Create Admin
+  /**
+   * 1. Reset demo users safely.
+   * This is important because update: {} does not refresh passwords
+   * if users already exist in production.
+   */
   const admin = await prisma.user.upsert({
     where: { email: "admin@demo.com" },
-    update: {},
+    update: {
+      name: "Admin User",
+      password,
+      role: Role.ADMIN,
+      department: "HR",
+      managerId: null,
+    },
     create: {
       name: "Admin User",
       email: "admin@demo.com",
@@ -22,10 +38,15 @@ async function main() {
     },
   })
 
-  // Create Manager
   const manager = await prisma.user.upsert({
     where: { email: "manager@demo.com" },
-    update: {},
+    update: {
+      name: "Priya Sharma",
+      password,
+      role: Role.MANAGER,
+      department: "Sales",
+      managerId: null,
+    },
     create: {
       name: "Priya Sharma",
       email: "manager@demo.com",
@@ -35,10 +56,15 @@ async function main() {
     },
   })
 
-  // Create Employee (reporting to manager)
   const employee = await prisma.user.upsert({
     where: { email: "employee@demo.com" },
-    update: {},
+    update: {
+      name: "Rahul Verma",
+      password,
+      role: Role.EMPLOYEE,
+      department: "Sales",
+      managerId: manager.id,
+    },
     create: {
       name: "Rahul Verma",
       email: "employee@demo.com",
@@ -49,25 +75,70 @@ async function main() {
     },
   })
 
-  // Create an active cycle
+  /**
+   * 2. Keep only one active cycle.
+   * This prevents old 2025 cycles from blocking goal creation.
+   */
+  await prisma.cycle.updateMany({
+    where: {
+      isActive: true,
+      id: {
+        not: "cycle-2026-demo",
+      },
+    },
+    data: {
+      isActive: false,
+    },
+  })
+
+  /**
+   * 3. Create/update an active demo cycle.
+   * Goal window is intentionally open until 30 June 2026
+   * so judges can test goal creation after deployment.
+   */
   await prisma.cycle.upsert({
-    where: { id: "cycle-2025" },
-    update: {},
+    where: { id: "cycle-2026-demo" },
+    update: {
+      name: "2026-27 Demo Annual Cycle",
+      year: 2026,
+      goalOpenDate: new Date("2026-05-01T00:00:00.000Z"),
+      goalCloseDate: new Date("2026-06-30T23:59:59.999Z"),
+      q1Start: new Date("2026-07-01T00:00:00.000Z"),
+      q2Start: new Date("2026-10-01T00:00:00.000Z"),
+      q3Start: new Date("2027-01-01T00:00:00.000Z"),
+      q4Start: new Date("2027-03-01T00:00:00.000Z"),
+      isActive: true,
+    },
     create: {
-      id: "cycle-2025",
-      name: "2025-26 Annual Cycle",
-      year: 2025,
-      goalOpenDate: new Date("2025-05-01"),
-      goalCloseDate: new Date("2025-05-31"),
-      q1Start: new Date("2025-07-01"),
-      q2Start: new Date("2025-10-01"),
-      q3Start: new Date("2026-01-01"),
-      q4Start: new Date("2026-03-01"),
+      id: "cycle-2026-demo",
+      name: "2026-27 Demo Annual Cycle",
+      year: 2026,
+      goalOpenDate: new Date("2026-05-01T00:00:00.000Z"),
+      goalCloseDate: new Date("2026-06-30T23:59:59.999Z"),
+      q1Start: new Date("2026-07-01T00:00:00.000Z"),
+      q2Start: new Date("2026-10-01T00:00:00.000Z"),
+      q3Start: new Date("2027-01-01T00:00:00.000Z"),
+      q4Start: new Date("2027-03-01T00:00:00.000Z"),
       isActive: true,
     },
   })
 
-  // Create goals for employee — APPROVED (to show full journey)
+  /**
+   * 4. Clean only demo employee goals before reseeding.
+   * This makes the seed idempotent and prevents duplicate cards.
+   * Because Checkin and AuditLog have cascade delete from Goal,
+   * deleting demo goals also removes their check-ins/audit logs.
+   */
+  await prisma.goal.deleteMany({
+    where: {
+      userId: employee.id,
+    },
+  })
+
+  /**
+   * 5. Create locked/approved goals for employee check-in demo.
+   * Weightage total = 100.
+   */
   const goal1 = await prisma.goal.create({
     data: {
       userId: employee.id,
@@ -120,20 +191,69 @@ async function main() {
     },
   })
 
-  // Add a Q1 checkin for goal1 (to show progress tracking)
-  await prisma.checkin.create({
-    data: {
-      goalId: goal1.id,
-      userId: employee.id,
-      quarter: Quarter.Q1,
-      actual: 3200000,
-      status: CheckinStatus.ON_TRACK,
-      score: 64.0,
-      managerComment: "Good start Rahul. Push harder in Q2 to close the gap.",
-    },
+  /**
+   * 6. Add check-ins for analytics/demo.
+   */
+  await prisma.checkin.createMany({
+    data: [
+      {
+        goalId: goal1.id,
+        userId: employee.id,
+        quarter: Quarter.Q1,
+        actual: 3200000,
+        status: CheckinStatus.ON_TRACK,
+        score: 64.0,
+        managerComment: "Good start Rahul. Push harder in Q2 to close the gap.",
+      },
+      {
+        goalId: goal2.id,
+        userId: employee.id,
+        quarter: Quarter.Q1,
+        actual: 88,
+        status: CheckinStatus.ON_TRACK,
+        score: 97.8,
+        managerComment: "Very close to target. Keep it up.",
+      },
+      {
+        goalId: goal2.id,
+        userId: employee.id,
+        quarter: Quarter.Q2,
+        actual: 91,
+        status: CheckinStatus.COMPLETED,
+        score: 100,
+      },
+      {
+        goalId: goal3.id,
+        userId: employee.id,
+        quarter: Quarter.Q1,
+        actual: 36,
+        status: CheckinStatus.ON_TRACK,
+        score: 100,
+        managerComment: "Excellent — well below the 48hr target.",
+      },
+      {
+        goalId: goal4.id,
+        userId: employee.id,
+        quarter: Quarter.Q1,
+        actual: 0,
+        status: CheckinStatus.COMPLETED,
+        score: 100,
+      },
+      {
+        goalId: goal4.id,
+        userId: employee.id,
+        quarter: Quarter.Q2,
+        actual: 0,
+        status: CheckinStatus.COMPLETED,
+        score: 100,
+      },
+    ],
   })
 
-  // Create a SUBMITTED goal for manager to demo approval flow
+  /**
+   * 7. Create submitted goals for manager approval demo.
+   * Weightage total = 100.
+   */
   await prisma.goal.createMany({
     data: [
       {
@@ -150,9 +270,10 @@ async function main() {
         userId: employee.id,
         thrustArea: "Learning & Development",
         title: "Complete CRM Certification",
-        description: "Finish Salesforce admin certification",
+        description: "Finish Salesforce admin certification before deadline",
         uomType: UoMType.TIMELINE,
-        target: 0,
+        target: null,
+        deadline: new Date("2026-06-20T00:00:00.000Z"),
         weightage: 30,
         status: GoalStatus.SUBMITTED,
       },
@@ -169,90 +290,10 @@ async function main() {
     ],
   })
 
-  // Add Q2 and Q3 check-ins for richer analytics charts
-  const allGoals = await prisma.goal.findMany({
-    where: { userId: employee.id, status: GoalStatus.LOCKED },
-  })
-
-  const goal1Locked = allGoals.find((g) => g.title === "Achieve Sales Target Q1")
-  const goal2Locked = allGoals.find((g) => g.title === "Improve Customer Retention Rate")
-  const goal3Locked = allGoals.find((g) => g.title === "Reduce TAT for Proposals")
-  const goal4Locked = allGoals.find((g) => g.title === "Zero Safety Incidents")
-
-  if (goal2Locked) {
-    await prisma.checkin.upsert({
-      where: { goalId_quarter: { goalId: goal2Locked.id, quarter: Quarter.Q1 } },
-      update: {},
-      create: {
-        goalId: goal2Locked.id,
-        userId: employee.id,
-        quarter: Quarter.Q1,
-        actual: 88,
-        status: CheckinStatus.ON_TRACK,
-        score: 97.8,
-        managerComment: "Very close to target. Keep it up.",
-      },
-    })
-
-    await prisma.checkin.upsert({
-      where: { goalId_quarter: { goalId: goal2Locked.id, quarter: Quarter.Q2 } },
-      update: {},
-      create: {
-        goalId: goal2Locked.id,
-        userId: employee.id,
-        quarter: Quarter.Q2,
-        actual: 91,
-        status: CheckinStatus.COMPLETED,
-        score: 100,
-      },
-    })
-  }
-
-  if (goal3Locked) {
-    await prisma.checkin.upsert({
-      where: { goalId_quarter: { goalId: goal3Locked.id, quarter: Quarter.Q1 } },
-      update: {},
-      create: {
-        goalId: goal3Locked.id,
-        userId: employee.id,
-        quarter: Quarter.Q1,
-        actual: 36,
-        status: CheckinStatus.ON_TRACK,
-        score: 100,
-        managerComment: "Excellent — well below the 48hr target.",
-      },
-    })
-  }
-
-  if (goal4Locked) {
-    await prisma.checkin.upsert({
-      where: { goalId_quarter: { goalId: goal4Locked.id, quarter: Quarter.Q1 } },
-      update: {},
-      create: {
-        goalId: goal4Locked.id,
-        userId: employee.id,
-        quarter: Quarter.Q1,
-        actual: 0,
-        status: CheckinStatus.COMPLETED,
-        score: 100,
-      },
-    })
-
-    await prisma.checkin.upsert({
-      where: { goalId_quarter: { goalId: goal4Locked.id, quarter: Quarter.Q2 } },
-      update: {},
-      create: {
-        goalId: goal4Locked.id,
-        userId: employee.id,
-        quarter: Quarter.Q2,
-        actual: 0,
-        status: CheckinStatus.COMPLETED,
-        score: 100,
-      },
-    })
-  }
-
-  // Seed default escalation rules
+  /**
+   * 8. Seed default escalation rules.
+   * update is not empty so reseeding refreshes rules safely.
+   */
   const escalationRules = [
     {
       id: "rule-goal-submission",
@@ -280,15 +321,22 @@ async function main() {
   for (const rule of escalationRules) {
     await prisma.escalationRule.upsert({
       where: { id: rule.id },
-      update: {},
+      update: {
+        name: rule.name,
+        triggerType: rule.triggerType,
+        daysThreshold: rule.daysThreshold,
+        isActive: rule.isActive,
+      },
       create: rule,
     })
   }
 
+  console.log("✅ Demo users reset")
+  console.log("✅ Active cycle opened until 30 June 2026")
+  console.log("✅ Demo goals and check-ins reseeded")
   console.log("✅ Escalation rules seeded")
-
-
   console.log("✅ Seeding complete!")
+
   console.log("\n📋 Demo Credentials:")
   console.log("  Employee → employee@demo.com / Demo@123")
   console.log("  Manager  → manager@demo.com  / Demo@123")
@@ -296,5 +344,10 @@ async function main() {
 }
 
 main()
-  .catch(console.error)
-  .finally(() => prisma.$disconnect())
+  .catch((error) => {
+    console.error("❌ Seed failed:", error)
+    process.exit(1)
+  })
+  .finally(async () => {
+    await prisma.$disconnect()
+  })

@@ -17,7 +17,8 @@ type Goal = {
   title: string
   description?: string | null
   uomType: string
-  target: number
+  target?: number | null
+  deadline?: string | Date | null
   weightage: number
   isShared?: boolean
 }

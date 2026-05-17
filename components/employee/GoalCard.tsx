@@ -18,6 +18,28 @@ interface GoalCardProps {
   readOnly?: boolean
 }
 
+function formatGoalTarget(goal: {
+  uomType: string
+  target?: number | null
+  deadline?: string | Date | null
+}) {
+  if (goal.uomType === "TIMELINE") {
+    return goal.deadline
+      ? `Deadline: ${new Date(goal.deadline).toLocaleDateString("en-IN")}`
+      : "Deadline: Not set"
+  }
+
+  if (goal.uomType === "ZERO") {
+    return "Target: 0"
+  }
+
+  if (goal.target === null || goal.target === undefined) {
+    return "Target: Not set"
+  }
+
+  return `Target: ${Number(goal.target).toLocaleString("en-IN")}`
+}
+
 export function GoalCard({ goal, onEdit, onDelete, readOnly }: GoalCardProps) {
   const statusCfg = STATUS_CONFIG[goal.status] || STATUS_CONFIG.DRAFT
   const uomInfo = UOM_LABELS[goal.uomType]
@@ -47,7 +69,7 @@ export function GoalCard({ goal, onEdit, onDelete, readOnly }: GoalCardProps) {
 
           <div className="flex items-center gap-4 mt-2">
             <span className="text-xs text-slate-500">
-              Target: <span className="font-medium text-slate-700">{goal.target.toLocaleString()}</span>
+              {formatGoalTarget(goal)}
             </span>
             <span className="text-xs font-semibold text-slate-800">
               {goal.weightage}% weight
