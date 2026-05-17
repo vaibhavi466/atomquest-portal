@@ -7,7 +7,6 @@ import { CheckinForm } from "@/components/employee/CheckinForm"
 import { ScoreBadge } from "@/components/shared/ScoreBadge"
 import { ProgressRing } from "@/components/shared/ProgressRing"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -16,8 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { UOM_LABELS } from "@/lib/calculations"
-import { calculateScore } from "@/lib/calculations"
-import { Pencil, Plus, Lock, MessageSquare } from "lucide-react"
+import { Pencil, Plus, Lock, MessageSquare, CalendarDays } from "lucide-react"
 
 const QUARTERS = [
   { key: "Q1", label: "Q1", period: "Jul – Sep" },
@@ -29,35 +27,124 @@ const QUARTERS = [
 
 const STATUS_STYLE: Record<string, string> = {
   NOT_STARTED: "bg-slate-100 text-slate-500",
-  ON_TRACK:    "bg-amber-100 text-amber-700",
-  COMPLETED:   "bg-green-100 text-green-700",
+  ON_TRACK: "bg-amber-100 text-amber-700",
+  COMPLETED: "bg-green-100 text-green-700",
+}
+
+// CHANGE: Added proper types instead of using any[] everywhere.
+// Reason: Timeline goals can have target = null and deadline = Date/string.
+type Goal = {
+  id: string
+  thrustArea: string
+  title: string
+  description?: string | null
+  uomType: string
+  target?: number | null
+  deadline?: string | Date | null
+  weightage: number
+  status: string
+  checkins?: Checkin[] | null
+}
+
+// CHANGE: Added completionDate because TIMELINE check-ins use completionDate instead of numeric actual.
+type Checkin = {
+  id: string
+  goalId: string
+  userId: string
+  quarter: string
+  actual?: number | null
+  completionDate?: string | Date | null
+  status: string
+  score?: number | null
+  managerComment?: string | null
+}
+
+// CHANGE: Added safe formatter.
+// Reason: goal.target.toLocaleString() crashes when target is null for TIMELINE goals.
+function formatGoalTarget(goal: Goal) {
+  if (goal.uomType === "TIMELINE") {
+    return goal.deadline
+      ? `Deadline: ${new Date(goal.deadline).toLocaleDateString("en-IN")}`
+      : "Deadline: Not set"
+  }
+
+  if (goal.uomType === "ZERO") {
+    return "Target: 0"
+  }
+
+  if (goal.target === null || goal.target === undefined) {
+    return "Target: Not set"
+  }
+
+  return `Target: ${Number(goal.target).toLocaleString("en-IN")}`
+}
+
+// CHANGE: Added safe formatter for check-in achievement.
+// Reason: Numeric goals show actual value, but TIMELINE goals show completion date.
+function formatCheckinAchievement(goal: Goal, checkin: Checkin) {
+  if (goal.uomType === "TIMELINE") {
+    return checkin.completionDate
+      ? `Completed: ${new Date(checkin.completionDate).toLocaleDateString("en-IN")}`
+      : null
+  }
+
+  if (checkin.actual === null || checkin.actual === undefined) {
+    return null
+  }
+
+  return `Actual: ${Number(checkin.actual).toLocaleString("en-IN")}`
 }
 
 export default function CheckinsPage() {
-  const [goals, setGoals] = useState<any[]>([])
+  // CHANGE: Replaced any[] with Goal[].
+  // Reason: Strong typing catches nullable target issues before deployment.
+  const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
+
   const [activeCheckin, setActiveCheckin] = useState<{
-    goal: any
+    goal: Goal
     quarter: string
-    existing?: any
+    existing?: Checkin
   } | null>(null)
+
   const [formLoading, setFormLoading] = useState(false)
 
   const fetchGoals = useCallback(async () => {
-    const res = await axios.get("/api/checkins")
-    setGoals(res.data)
-    setLoading(false)
+    try {
+      const res = await axios.get("/api/checkins")
+
+      // CHANGE: Defensive array check.
+      // Reason: Prevents page crash if API returns unexpected response.
+      setGoals(Array.isArray(res.data) ? res.data : [])
+    } catch (error) {
+      console.error("FETCH_CHECKINS_ERROR:", error)
+
+      toast.error("Failed to load check-ins", {
+        description: "Please refresh the page or try again later.",
+      })
+
+      setGoals([])
+    } finally {
+      // CHANGE: Moved setLoading(false) to finally.
+      // Reason: Prevents infinite loading if API fails.
+      setLoading(false)
+    }
   }, [])
 
-  useEffect(() => { fetchGoals() }, [fetchGoals])
+  useEffect(() => {
+    fetchGoals()
+  }, [fetchGoals])
 
   async function handleCheckinSubmit(data: any) {
     if (!activeCheckin) return
+
     setFormLoading(true)
+
     try {
       await axios.post(`/api/checkins/${activeCheckin.goal.id}`, data)
       await fetchGoals()
       setActiveCheckin(null)
+
       toast.success("Check-in saved", {
         description: "Progress score updated automatically.",
       })
@@ -70,14 +157,19 @@ export default function CheckinsPage() {
     }
   }
 
-  if (loading) return <div className="p-8 text-slate-400">Loading check-ins...</div>
+  if (loading) {
+    return <div className="p-8 text-slate-400">Loading check-ins...</div>
+  }
 
   return (
     <div className="p-8 max-w-5xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-slate-900">Quarterly Check-ins</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">
+          Quarterly Check-ins
+        </h1>
         <p className="text-slate-500 mt-1 text-sm">
-          Log your actual achievement per quarter. Scores are computed automatically.
+          Log your actual achievement per quarter. Scores are computed
+          automatically.
         </p>
       </div>
 
@@ -86,27 +178,35 @@ export default function CheckinsPage() {
           <Lock size={32} className="text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500 font-medium">No approved goals yet</p>
           <p className="text-slate-400 text-sm mt-1">
-            Goals must be approved by your manager before check-ins are available
+            Goals must be approved by your manager before check-ins are
+            available.
           </p>
         </div>
       )}
 
       <div className="space-y-6">
         {goals.map((goal) => {
-          // Build checkin map by quarter
-          const checkinMap: Record<string, any> = {}
-          goal.checkins.forEach((c: any) => {
-            checkinMap[c.quarter] = c
+          // CHANGE: Safe fallback for goal.checkins.
+          // Reason: goal.checkins can be undefined/null if API changes or returns partial data.
+          const checkins = Array.isArray(goal.checkins) ? goal.checkins : []
+
+          const checkinMap: Record<string, Checkin> = {}
+
+          checkins.forEach((checkin) => {
+            checkinMap[checkin.quarter] = checkin
           })
 
-          // Compute average score across completed checkins
-          const scoredCheckins = goal.checkins.filter(
-            (c: any) => c.score !== null && c.score !== undefined
+          const scoredCheckins = checkins.filter(
+            (checkin) =>
+              checkin.score !== null && checkin.score !== undefined
           )
+
           const avgScore =
             scoredCheckins.length > 0
-              ? scoredCheckins.reduce((s: number, c: any) => s + c.score, 0) /
-                scoredCheckins.length
+              ? scoredCheckins.reduce(
+                  (sum, checkin) => sum + Number(checkin.score ?? 0),
+                  0
+                ) / scoredCheckins.length
               : 0
 
           return (
@@ -118,20 +218,26 @@ export default function CheckinsPage() {
                       <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
                         {goal.thrustArea}
                       </span>
+
                       <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
-                        {UOM_LABELS[goal.uomType]?.label?.split(" (")[0]}
+                        {UOM_LABELS[goal.uomType]?.label?.split(" (")[0] ||
+                          goal.uomType}
                       </span>
+
                       <span className="text-xs font-semibold text-slate-700">
                         {goal.weightage}% weight
                       </span>
                     </div>
+
                     <p className="font-medium text-slate-900">{goal.title}</p>
+
+                    {/* CHANGE: Replaced goal.target.toLocaleString().
+                        Reason: TIMELINE goals have target = null, which caused the production crash. */}
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Target: {goal.target.toLocaleString()}
+                      {formatGoalTarget(goal)}
                     </p>
                   </div>
 
-                  {/* Avg score ring */}
                   {scoredCheckins.length > 0 && (
                     <ProgressRing score={avgScore} size={56} strokeWidth={5} />
                   )}
@@ -139,12 +245,18 @@ export default function CheckinsPage() {
               </CardHeader>
 
               <CardContent className="pt-4">
-                {/* Quarter grid */}
-                <div className="grid grid-cols-5 gap-3">
+                {/* CHANGE: Made grid responsive.
+                    Reason: grid-cols-5 can overflow on smaller screens. */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                   {QUARTERS.map(({ key, label, period }) => {
                     const checkin = checkinMap[key]
-                    const hasCheckin = !!checkin
+                    const hasCheckin = Boolean(checkin)
                     const score = checkin?.score ?? null
+
+                    // CHANGE: Safe achievement display for numeric and timeline goals.
+                    const achievementText = checkin
+                      ? formatCheckinAchievement(goal, checkin)
+                      : null
 
                     return (
                       <div
@@ -155,18 +267,21 @@ export default function CheckinsPage() {
                             : "border-dashed border-slate-200 bg-slate-50/50"
                         }`}
                       >
-                        {/* Quarter label */}
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-semibold text-slate-700">{label}</span>
-                          <span className="text-xs text-slate-400">{period}</span>
+                          <span className="text-xs font-semibold text-slate-700">
+                            {label}
+                          </span>
+                          <span className="text-xs text-slate-400">
+                            {period}
+                          </span>
                         </div>
 
-                        {hasCheckin ? (
+                        {hasCheckin && checkin ? (
                           <>
-                            {/* Status pill */}
                             <span
                               className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                STATUS_STYLE[checkin.status]
+                                STATUS_STYLE[checkin.status] ||
+                                STATUS_STYLE.NOT_STARTED
                               }`}
                             >
                               {checkin.status === "NOT_STARTED"
@@ -176,38 +291,43 @@ export default function CheckinsPage() {
                                 : "Completed"}
                             </span>
 
-                            {/* Actual value */}
-                            {checkin.actual !== null && checkin.actual !== undefined && (
-                              <p className="text-xs text-slate-500 mt-2">
-                                Actual:{" "}
+                            {/* CHANGE: Displays completion date for TIMELINE and actual value for numeric goals. */}
+                            {achievementText && (
+                              <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
+                                {goal.uomType === "TIMELINE" && (
+                                  <CalendarDays size={11} />
+                                )}
                                 <span className="font-medium text-slate-800">
-                                  {Number(checkin.actual).toLocaleString()}
+                                  {achievementText}
                                 </span>
                               </p>
                             )}
 
-                            {/* Score */}
-                            {score !== null && (
+                            {score !== null && score !== undefined && (
                               <div className="mt-2">
-                                <ScoreBadge score={score} size="sm" />
+                                <ScoreBadge score={Number(score)} size="sm" />
                               </div>
                             )}
 
-                            {/* Manager comment indicator */}
                             {checkin.managerComment && (
                               <div className="mt-2 flex items-center gap-1 text-blue-600">
                                 <MessageSquare size={11} />
-                                <span className="text-xs">Manager comment</span>
+                                <span className="text-xs">
+                                  Manager comment
+                                </span>
                               </div>
                             )}
 
-                            {/* Edit button */}
                             <Button
                               size="sm"
                               variant="ghost"
                               className="mt-2 h-6 text-xs w-full text-slate-500 hover:text-slate-800"
                               onClick={() =>
-                                setActiveCheckin({ goal, quarter: key, existing: checkin })
+                                setActiveCheckin({
+                                  goal,
+                                  quarter: key,
+                                  existing: checkin,
+                                })
                               }
                             >
                               <Pencil size={11} className="mr-1" />
@@ -220,7 +340,11 @@ export default function CheckinsPage() {
                             variant="ghost"
                             className="mt-1 h-7 text-xs w-full text-slate-400 hover:text-slate-700 border border-dashed border-slate-300 hover:border-slate-400"
                             onClick={() =>
-                              setActiveCheckin({ goal, quarter: key, existing: undefined })
+                              setActiveCheckin({
+                                goal,
+                                quarter: key,
+                                existing: undefined,
+                              })
                             }
                           >
                             <Plus size={11} className="mr-1" />
@@ -237,10 +361,13 @@ export default function CheckinsPage() {
         })}
       </div>
 
-      {/* Check-in Dialog */}
       <Dialog
-        open={!!activeCheckin}
-        onOpenChange={() => setActiveCheckin(null)}
+        open={Boolean(activeCheckin)}
+        onOpenChange={(open) => {
+          // CHANGE: Close dialog only when open becomes false.
+          // Reason: Safer than always clearing activeCheckin on every state change.
+          if (!open) setActiveCheckin(null)
+        }}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -249,6 +376,7 @@ export default function CheckinsPage() {
               {activeCheckin?.quarter}
             </DialogTitle>
           </DialogHeader>
+
           {activeCheckin && (
             <CheckinForm
               goal={activeCheckin.goal}
