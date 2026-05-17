@@ -26,7 +26,8 @@ interface CheckinFormProps {
     id: string
     title: string
     uomType: string
-    target: number
+    target?: number | null
+    deadline?: string | null
   }
   quarter: string
   existing?: {
@@ -60,9 +61,9 @@ export function CheckinForm({
   // Live score preview
   const previewScore = calculateScore(
     goal.uomType,
-    goal.target,
+    goal.target ?? null,
     actual !== "" ? parseFloat(actual) : null,
-    goal.uomType === "TIMELINE" ? new Date() : null,
+    goal.uomType === "TIMELINE" && goal.deadline ? new Date(goal.deadline) : null,
     goal.uomType === "TIMELINE" && completionDate ? new Date(completionDate) : null
   )
 
@@ -87,7 +88,10 @@ export function CheckinForm({
         <p className="text-sm font-medium text-slate-800">{goal.title}</p>
         <p className="text-xs text-slate-400 mt-0.5">
           {UOM_LABELS[goal.uomType]?.label?.split(" (")[0]} ·{" "}
-          Target: {goal.target.toLocaleString()}
+          {goal.uomType === "TIMELINE"
+            ? `Deadline: ${goal.deadline ? new Date(goal.deadline).toLocaleDateString() : "Not set"}`
+            : `Target: ${(goal.target ?? 0).toLocaleString()}`
+          }
         </p>
       </div>
 
@@ -101,7 +105,7 @@ export function CheckinForm({
           <Input
             type="number"
             step="any"
-            placeholder={`e.g. ${Math.round(goal.target * 0.8)}`}
+            placeholder={`e.g. ${Math.round((goal.target ?? 0) * 0.8)}`}
             value={actual}
             onChange={(e) => setActual(e.target.value)}
           />
@@ -131,7 +135,11 @@ export function CheckinForm({
       {/* Status */}
       <div className="space-y-1.5">
         <Label>Status</Label>
-        <Select value={status} onValueChange={setStatus}>
+        <Select value={status} onValueChange={(value) => {
+          if (value !== null) {
+            setStatus(value); // Only call setStatus if value is not null
+          }
+        }}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>

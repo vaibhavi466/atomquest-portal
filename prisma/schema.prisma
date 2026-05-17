@@ -79,9 +79,11 @@ model Goal {
   title        String
   description  String?
   uomType      UoMType
-  target       Float
+  target       Float?
+  deadline     DateTime?
   weightage    Float
   status       GoalStatus @default(DRAFT)
+  lockedAt     DateTime?
 
   // Shared goals
   isShared     Boolean    @default(false)

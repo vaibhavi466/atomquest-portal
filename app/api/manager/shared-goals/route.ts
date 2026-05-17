@@ -40,22 +40,78 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Create a shared goal for each employee
-  // Target is locked (isShared = true means employee cannot edit target)
-  const createdGoals = await prisma.goal.createMany({
-    data: employeeIds.map((empId: string) => ({
-      userId: empId,
+  
+  const uomType = goal.uomType as UoMType
+const weightage = parseFloat(goal.weightage || 10)
+
+if (weightage < 10 || weightage > 100) {
+  return NextResponse.json(
+    { error: "Weightage must be between 10 and 100" },
+    { status: 400 }
+  )
+}
+
+const target =
+  uomType === UoMType.TIMELINE ? null : parseFloat(goal.target)
+
+const deadline =
+  uomType === UoMType.TIMELINE && goal.deadline
+    ? new Date(goal.deadline)
+    : null
+
+if (uomType !== UoMType.TIMELINE && Number.isNaN(target as number)) {
+  return NextResponse.json(
+    { error: "Target must be a valid number" },
+    { status: 400 }
+  )
+}
+
+  if (uomType === UoMType.TIMELINE && (!deadline || Number.isNaN(deadline.getTime()))) {
+    return NextResponse.json(
+      { error: "Deadline is required for timeline shared goals" },
+      { status: 400 }
+    )
+  }
+
+  const [primaryEmployeeId, ...otherEmployeeIds] = employeeIds
+
+  const primaryGoal = await prisma.goal.create({
+    data: {
+      userId: primaryEmployeeId,
       thrustArea: goal.thrustArea,
       title: goal.title,
       description: goal.description || null,
-      uomType: goal.uomType as UoMType,
-      target: parseFloat(goal.target),
-      weightage: parseFloat(goal.weightage || 10),
+      uomType,
+      target,
+      deadline,
+      weightage,
       status: GoalStatus.DRAFT,
       isShared: true,
-      sharedFromId: managerId,
-    })),
+    },
   })
 
-  return NextResponse.json({ success: true, created: createdGoals.count })
+  if (otherEmployeeIds.length > 0) {
+    await prisma.goal.createMany({
+      data: otherEmployeeIds.map((empId: string) => ({
+        userId: empId,
+        thrustArea: goal.thrustArea,
+        title: goal.title,
+        description: goal.description || null,
+        uomType,
+        target,
+        deadline,
+        weightage,
+        status: GoalStatus.DRAFT,
+        isShared: true,
+        sharedFromId: primaryGoal.id,
+      })),
+    })
+  }
+
+  return NextResponse.json({
+    success: true,
+    created: employeeIds.length,
+    primaryGoalId: primaryGoal.id,
+  })
+
 }

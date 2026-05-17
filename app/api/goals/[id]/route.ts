@@ -107,8 +107,17 @@ export async function PATCH(
     // Supports both possible frontend names
     const targetValue = body.target ?? body.maxAllowedValue
     const weightageValue = body.weightage
+    const deadlineValue = body.deadline
 
-    if (!thrustArea || !title || !uomType || targetValue === undefined || weightageValue === undefined) {
+
+    if (
+      !thrustArea ||
+      !title ||
+      !uomType ||
+      weightageValue === undefined ||
+      (uomType !== UoMType.TIMELINE && targetValue === undefined) ||
+      (uomType === UoMType.TIMELINE && !deadlineValue)
+    ){
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
@@ -116,7 +125,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid measurement type" }, { status: 400 })
     }
 
-    const target = Number(targetValue)
+    const target = uomType === UoMType.TIMELINE ? null : Number(targetValue)
+    const deadline = uomType === UoMType.TIMELINE ? new Date(deadlineValue) : null
     const weightage = Number(weightageValue)
 
     // CHANGE: Validate total editable goal weightage during normal goal edit.
@@ -153,12 +163,16 @@ export async function PATCH(
         )
       }
 
-    if(Number.isNaN(target) || Number.isNaN(weightage)) {
+    if (
+      (uomType !== UoMType.TIMELINE && Number.isNaN(target)) ||
+      (uomType === UoMType.TIMELINE && (!deadline || Number.isNaN(deadline.getTime()))) ||
+      Number.isNaN(weightage)
+    ){
       return NextResponse.json({ error: "Target and weightage must be valid numbers" }, { status: 400 })
     }
 
-    if(weightage <= 0 || weightage > 100) {
-      return NextResponse.json({ error: "Weightage must be a value between 1 and 100" }, { status: 400 })
+    if(weightage < 10 || weightage > 100) {
+      return NextResponse.json({ error: "Weightage must be a value between 10 and 100" }, { status: 400 })
     }
 
     const updated = await prisma.goal.update({
@@ -169,6 +183,7 @@ export async function PATCH(
         description,
         uomType,
         target,
+        deadline,
         weightage
       }
     })

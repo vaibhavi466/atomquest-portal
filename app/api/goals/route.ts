@@ -1,35 +1,34 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/app/api/auth/[...nextauth]/route"
 import { prisma } from "@/lib/prisma"
-import { validateGoalSet } from "@/lib/calculations"
 import { GoalStatus, UoMType } from "@prisma/client"
 
-// GET /api/goals — fetch current user's goals
-// export async function GET(req: NextRequest) {
-//   const session = await auth()
-//   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+// Utility: checks if current date is inside allowed window
+function isWithinWindow(start: Date, end: Date, now = new Date()) {
+  return now >= start && now <= end
+}
 
-//   const userId = (session.user as any).id
-
-//   const goals = await prisma.goal.findMany({
-//     where: { userId },
-//     include: {
-//       checkins: { orderBy: { quarter: "asc" } },
-//     },
-//     orderBy: { createdAt: "asc" },
-//   })
-
-//   return NextResponse.json(goals)
-// }
+// GET /api/goals
+// Fetch current logged-in user's goals
 export async function GET(req: NextRequest) {
   try {
     const session = await auth()
 
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
     }
 
     const userId = (session.user as any).id
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User ID missing in session" },
+        { status: 401 }
+      )
+    }
 
     const goals = await prisma.goal.findMany({
       where: { userId },
@@ -52,101 +51,111 @@ export async function GET(req: NextRequest) {
   }
 }
 
-
-// POST /api/goals — create a single goal (saved as DRAFT)
-// export async function POST(req: NextRequest) {
-//   const session = await auth()
-//   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-//   const userId = (session.user as any).id
-//   const body = await req.json()
-
-//   // Count existing non-returned goals
-//   const existingGoals = await prisma.goal.findMany({
-//     where: {
-//       userId,
-//       status: { not: GoalStatus.RETURNED },
-//     },
-//     select: { weightage: true },
-//   })
-
-//   if (existingGoals.length >= 8) {
-//     return NextResponse.json({ error: "Maximum 8 goals allowed per cycle." }, { status: 400 })
-//   }
-
-//   if (body.weightage < 10) {
-//     return NextResponse.json({ error: "Minimum 10% weightage per goal." }, { status: 400 })
-//   }
-
-//   const goal = await prisma.goal.create({
-//     data: {
-//       userId,
-//       thrustArea: body.thrustArea,
-//       title: body.title,
-//       description: body.description || null,
-//       uomType: body.uomType,
-//       target: parseFloat(body.target),
-//       weightage: parseFloat(body.weightage),
-//       status: GoalStatus.DRAFT,
-//     },
-//   })
-
-//   return NextResponse.json(goal, { status: 201 })
-// }
-
+// POST /api/goals
+// Create a single goal as DRAFT
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
 
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
     }
 
     const userId = (session.user as any).id
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User ID missing in session" },
+        { status: 401 }
+      )
+    }
+
     const body = await req.json()
 
-    const thrustArea = body.thrustArea
-    const title = body.title
-    const description = body.description || null
+    const thrustArea = typeof body.thrustArea === "string" ? body.thrustArea.trim() : ""
+    const title = typeof body.title === "string" ? body.title.trim() : ""
+    const description =
+      typeof body.description === "string" && body.description.trim()
+        ? body.description.trim()
+        : null
 
     // Supports both frontend naming styles
-    const uomType = body.uomType || body.measurementType
+    const rawUomType = body.uomType || body.measurementType
     const targetValue = body.target ?? body.maxAllowedValue
+    const deadlineValue = body.deadline
     const weightageValue = body.weightage
 
-    if (
-      !thrustArea ||
-      !title ||
-      !uomType ||
-      targetValue === undefined ||
-      weightageValue === undefined
-    ) {
+    // Basic required validation
+    if (!thrustArea || !title || !rawUomType || weightageValue === undefined || weightageValue === null) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       )
     }
 
-    if (!Object.values(UoMType).includes(uomType)) {
+    // Validate UoM type safely
+    if (!Object.values(UoMType).includes(rawUomType as UoMType)) {
       return NextResponse.json(
-        { error: "Invalid measurement type" },
+        { error: "Invalid unit of measurement type" },
         { status: 400 }
       )
     }
 
-    const target = Number(targetValue)
+    const uomType = rawUomType as UoMType
+
+    // Validate target/deadline based on UoM type
+    let target: number | null = null
+    let deadline: Date | null = null
+
+    if (uomType === UoMType.TIMELINE) {
+      if (!deadlineValue) {
+        return NextResponse.json(
+          { error: "Deadline is required for timeline goals" },
+          { status: 400 }
+        )
+      }
+
+      deadline = new Date(deadlineValue)
+
+      if (Number.isNaN(deadline.getTime())) {
+        return NextResponse.json(
+          { error: "Deadline must be a valid date" },
+          { status: 400 }
+        )
+      }
+    } else {
+      if (targetValue === undefined || targetValue === null || targetValue === "") {
+        return NextResponse.json(
+          { error: "Target is required" },
+          { status: 400 }
+        )
+      }
+
+      target = Number(targetValue)
+
+      if (Number.isNaN(target)) {
+        return NextResponse.json(
+          { error: "Target must be a valid number" },
+          { status: 400 }
+        )
+      }
+    }
+
     const weightage = Number(weightageValue)
 
-    if (Number.isNaN(target) || Number.isNaN(weightage)) {
+    if (Number.isNaN(weightage)) {
       return NextResponse.json(
-        { error: "Target and weightage must be valid numbers" },
+        { error: "Weightage must be a valid number" },
         { status: 400 }
       )
     }
 
     if (weightage < 10) {
       return NextResponse.json(
-        { error: "Minimum 10% weightage per goal." },
+        { error: "Minimum 10% weightage per goal is required." },
         { status: 400 }
       )
     }
@@ -158,7 +167,34 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Count only editable goals for current draft submission
+    // ZERO-based goals must have target 0
+    if (uomType === UoMType.ZERO && target !== 0) {
+      return NextResponse.json(
+        { error: "ZERO type goals must have target 0." },
+        { status: 400 }
+      )
+    }
+
+    // Enforce active goal-setting window if active cycle exists
+    const activeCycle = await prisma.cycle.findFirst({
+      where: { isActive: true },
+      select: {
+        goalOpenDate: true,
+        goalCloseDate: true,
+      },
+    })
+
+    if (
+      activeCycle &&
+      !isWithinWindow(activeCycle.goalOpenDate, activeCycle.goalCloseDate)
+    ) {
+      return NextResponse.json(
+        { error: "Goal creation window is currently closed." },
+        { status: 400 }
+      )
+    }
+
+    // Count current editable goals
     const editableGoals = await prisma.goal.findMany({
       where: {
         userId,
@@ -171,22 +207,27 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    // Max 8 goals rule
     if (editableGoals.length >= 8) {
       return NextResponse.json(
-        { error: "Maximum 8 editable goals allowed." },
+        { error: "Maximum 8 goals allowed per employee." },
         { status: 400 }
       )
     }
 
+    // Prevent total draft/returned weightage from exceeding 100
     const existingWeightage = editableGoals.reduce(
-      (sum, goal) => sum + goal.weightage,
+      (sum, goal) => sum + Number(goal.weightage),
       0
     )
 
-    if (existingWeightage + weightage > 100) {
+    const totalAfterAdding = existingWeightage + weightage
+
+    if (totalAfterAdding > 100.01) {
       return NextResponse.json(
         {
-          error: `Total editable goal weightage cannot exceed 100%. Remaining: ${(
+          error: `Total goal weightage cannot exceed 100%. Remaining weightage: ${Math.max(
+            0,
             100 - existingWeightage
           ).toFixed(1)}%`,
         },
@@ -202,6 +243,7 @@ export async function POST(req: NextRequest) {
         description,
         uomType,
         target,
+        deadline,
         weightage,
         status: GoalStatus.DRAFT,
       },

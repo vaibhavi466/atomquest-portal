@@ -3,6 +3,7 @@ import { auth } from "@/app/api/auth/[...nextauth]/route"
 import { prisma } from "@/lib/prisma"
 import { GoalStatus, Role } from "@prisma/client"
 import { notify } from "@/lib/notifications"
+import { validateGoalSet } from "@/lib/calculations"
 
 // POST /api/manager/goals/:id/approve
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -40,10 +41,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       { status: 400 }
     )
   }
+  const submittedGoals = await prisma.goal.findMany({
+    where: {
+      userId: goal.userId,
+      status: GoalStatus.SUBMITTED,
+    },
+    select: {
+      weightage: true,
+    },
+  })
+  const validation = validateGoalSet(submittedGoals)
+
+  if (!validation.valid) {
+    return NextResponse.json(
+      { errors: validation.errors },
+      { status: 400 }
+    )
+  }
 
   const updated = await prisma.goal.update({
     where: { id },
-    data: { status: GoalStatus.LOCKED },
+    data: { status: GoalStatus.LOCKED, lockedAt: new Date(), },
   })
 
   const manager = await prisma.user.findUnique({

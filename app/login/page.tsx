@@ -1,13 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { signIn as nextAuthSignIn } from "next-auth/react"
+import { signIn } from "next-auth/react"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -99,7 +98,7 @@ export default function LoginPage() {
 
             <button
               type="button"
-              onClick={() => nextAuthSignIn("microsoft-entra-id", { callbackUrl: "/" })}
+              onClick={() => signIn("microsoft-entra-id", { callbackUrl: "/" })}
               className="w-full flex items-center justify-center gap-3 border border-slate-200
                         rounded-lg px-4 py-2.5 text-sm font-medium text-slate-700
                         hover:bg-slate-50 transition-colors"
@@ -112,7 +111,11 @@ export default function LoginPage() {
                 <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
               </svg>
               Sign in with Microsoft
+              <span className="ml-2 text-xs text-slate-400">(Enterprise SSO)</span>
             </button>
+            <p className="text-xs text-red-600 text-center">
+                Microsoft SSO requires Azure tenant configuration. Use demo credentials for evaluation.
+            </p>
           </>
         )}
 

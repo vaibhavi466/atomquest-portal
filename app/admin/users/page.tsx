@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Plus, UserCog } from "lucide-react"
+import { Role } from "@prisma/client"
 
 const ROLE_COLORS: Record<string, string> = {
   ADMIN:    "bg-purple-100 text-purple-700",
@@ -175,21 +176,22 @@ export default function UsersPage() {
             ))}
             <div className="space-y-1.5">
               <Label>Role</Label>
-              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
+              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: (v ?? Role.EMPLOYEE) as Role })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="EMPLOYEE">Employee</SelectItem>
-                  <SelectItem value="MANAGER">Manager</SelectItem>
-                  <SelectItem value="ADMIN">Admin</SelectItem>
+                  <SelectItem value={Role.EMPLOYEE}>Employee</SelectItem>
+                  <SelectItem value={Role.MANAGER}>Manager</SelectItem>
+                  <SelectItem value={Role.ADMIN}>Admin</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {form.role === "EMPLOYEE" && managers.length > 0 && (
+            {form.role === Role.EMPLOYEE && managers.length > 0 && (
               <div className="space-y-1.5">
                 <Label>Assign Manager</Label>
+
                 <Select
                   value={form.managerId}
-                  onValueChange={(v) => setForm({ ...form, managerId: v })}
+                  onValueChange={(v) => setForm({ ...form, managerId: v ?? "" })}
                 >
                   <SelectTrigger><SelectValue placeholder="Select manager" /></SelectTrigger>
                   <SelectContent>
@@ -236,22 +238,22 @@ export default function UsersPage() {
                 <Label>Role</Label>
                 <Select
                   value={editUser.role}
-                  onValueChange={(v) => setEditUser({ ...editUser, role: v })}
+                  onValueChange={(v) => setEditUser({ ...editUser, role: (v ?? Role.EMPLOYEE) as Role })}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="EMPLOYEE">Employee</SelectItem>
-                    <SelectItem value="MANAGER">Manager</SelectItem>
-                    <SelectItem value="ADMIN">Admin</SelectItem>
+                    <SelectItem value={Role.EMPLOYEE}>Employee</SelectItem>
+                    <SelectItem value={Role.MANAGER}>Manager</SelectItem>
+                    <SelectItem value={Role.ADMIN}>Admin</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              {editUser.role === "EMPLOYEE" && (
+              {editUser.role === Role.EMPLOYEE && (
                 <div className="space-y-1.5">
                   <Label>Manager</Label>
                   <Select
                     value={editUser.managerId || ""}
-                    onValueChange={(v) => setEditUser({ ...editUser, managerId: v })}
+                    onValueChange={(v) => setEditUser({ ...editUser, managerId: v ?? "" })}
                   >
                     <SelectTrigger><SelectValue placeholder="Select manager" /></SelectTrigger>
                     <SelectContent>

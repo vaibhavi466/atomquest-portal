@@ -48,13 +48,24 @@ export function getRemainingWeightage(goals: GoalInput[], excludeIndex?: number)
 
 export function calculateScore(
   uomType: string,
-  target: number,
+  target: number | null,
   actual: number | null,
   deadline?: Date | null,
   completionDate?: Date | null
 ): number {
-  if (actual === null || actual === undefined) return 0
+  if (uomType === "TIMELINE") {
+    if (!deadline || !completionDate) return 0
 
+    const deadlineMs = new Date(deadline).getTime()
+    const completionMs = new Date(completionDate).getTime()
+
+    if (Number.isNaN(deadlineMs) || Number.isNaN(completionMs)) return 0
+
+    return completionMs <= deadlineMs ? 100 : 0
+  }
+
+  if (actual === null || actual === undefined) return 0
+  if (target === null || target === undefined) return 0
   switch (uomType) {
     case "MIN": {
       // Higher actual = better (e.g. sales revenue)
@@ -74,14 +85,7 @@ export function calculateScore(
     }
 
     case "TIMELINE": {
-      // Completion before or on deadline = 100
-      if (!deadline || !completionDate) return 0
-      const deadlineMs = new Date(deadline).getTime()
-      const completionMs = new Date(completionDate).getTime()
-      if (completionMs <= deadlineMs) return 100
-      // Each day late = -5 points
-      const daysLate = Math.ceil((completionMs - deadlineMs) / (1000 * 60 * 60 * 24))
-      return Math.max(0, 100 - daysLate * 5)
+      return 0 // Timeline scoring handled separately above
     }
 
     default:
@@ -133,7 +137,7 @@ export const UOM_LABELS: Record<string, { label: string; hint: string; targetLab
     targetLabel: "Max Allowed Value",
   },
   ZERO: {
-    label: "Zero (Zero = Full Score)",
+    label: "Zero-Based (Zero = Full Score)",
     hint: "Full score only if actual value is zero (e.g. zero incidents)",
     targetLabel: "Target (must be 0)",
   },

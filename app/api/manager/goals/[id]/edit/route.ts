@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/app/api/auth/[...nextauth]/route"
 import { prisma } from "@/lib/prisma"
-import { GoalStatus, Role } from "@prisma/client"
+import { GoalStatus, Role, UoMType } from "@prisma/client"
 
 export async function PATCH(
   req: NextRequest,
@@ -10,30 +10,40 @@ export async function PATCH(
   try {
     const session = await auth()
 
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
     }
 
     const managerId = (session.user as any).id
     const role = (session.user as any).role
     const { id } = await params
 
+    if (!managerId) {
+      return NextResponse.json(
+        { error: "User ID missing in session" },
+        { status: 401 }
+      )
+    }
+
     if (role !== Role.MANAGER && role !== Role.ADMIN) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return NextResponse.json(
+        { error: "Forbidden" },
+        { status: 403 }
+      )
     }
 
     const body = await req.json()
 
-    const target = Number(body.target)
     const weightage = Number(body.weightage)
-    const description = body.description || null
+    const description =
+      typeof body.description === "string" && body.description.trim()
+        ? body.description.trim()
+        : null
 
-    if (Number.isNaN(target)) {
-      return NextResponse.json(
-        { error: "Target must be a valid number" },
-        { status: 400 }
-      )
-    }
+    const deadlineValue = body.deadline
 
     if (Number.isNaN(weightage)) {
       return NextResponse.json(
@@ -57,7 +67,10 @@ export async function PATCH(
     })
 
     if (!goal) {
-      return NextResponse.json({ error: "Goal not found" }, { status: 404 })
+      return NextResponse.json(
+        { error: "Goal not found" },
+        { status: 404 }
+      )
     }
 
     if (role !== Role.ADMIN && goal.user.managerId !== managerId) {
@@ -74,20 +87,122 @@ export async function PATCH(
       )
     }
 
-    if (goal.isShared && target !== goal.target) {
+    let target: number | null = null
+    let deadline: Date | null = null
+
+    if (goal.uomType === UoMType.TIMELINE) {
+      if (!deadlineValue) {
+        return NextResponse.json(
+          { error: "Deadline is required for timeline goals" },
+          { status: 400 }
+        )
+      }
+
+      deadline = new Date(deadlineValue)
+
+      if (Number.isNaN(deadline.getTime())) {
+        return NextResponse.json(
+          { error: "Deadline must be a valid date" },
+          { status: 400 }
+        )
+      }
+    } else {
+      const targetValue = body.target ?? body.maxAllowedValue
+
+      if (
+        targetValue === undefined ||
+        targetValue === null ||
+        targetValue === ""
+      ) {
+        return NextResponse.json(
+          { error: "Target is required" },
+          { status: 400 }
+        )
+      }
+
+      target = Number(targetValue)
+
+      if (Number.isNaN(target)) {
+        return NextResponse.json(
+          { error: "Target must be a valid number" },
+          { status: 400 }
+        )
+      }
+
+      if (goal.uomType === UoMType.ZERO && target !== 0) {
+        return NextResponse.json(
+          { error: "ZERO type goals must have target 0" },
+          { status: 400 }
+        )
+      }
+    }
+
+    if (goal.isShared && goal.uomType !== UoMType.TIMELINE && target !== goal.target) {
       return NextResponse.json(
         { error: "Target cannot be changed for shared goals" },
         { status: 400 }
       )
     }
 
+    if (
+      goal.isShared &&
+      goal.uomType === UoMType.TIMELINE &&
+      goal.deadline &&
+      deadline &&
+      goal.deadline.getTime() !== deadline.getTime()
+    ) {
+      return NextResponse.json(
+        { error: "Deadline cannot be changed for shared timeline goals" },
+        { status: 400 }
+      )
+    }
+
+    const siblingGoals = await prisma.goal.findMany({
+      where: {
+        userId: goal.userId,
+        status: GoalStatus.SUBMITTED,
+        id: {
+          not: id,
+        },
+      },
+      select: {
+        weightage: true,
+      },
+    })
+
+    const totalAfterEdit =
+      siblingGoals.reduce((sum, item) => sum + Number(item.weightage), 0) +
+      weightage
+
+    if (Math.abs(totalAfterEdit - 100) > 0.01) {
+      return NextResponse.json(
+        {
+          error: `Total submitted goal weightage must remain 100%. Current total after edit: ${totalAfterEdit.toFixed(
+            1
+          )}%.`,
+        },
+        { status: 400 }
+      )
+    }
+
+    const updateData =
+      goal.uomType === UoMType.TIMELINE
+        ? {
+            target: null,
+            deadline,
+            weightage,
+            description,
+          }
+        : {
+            target,
+            deadline: null,
+            weightage,
+            description,
+          }
+
     const updatedGoal = await prisma.goal.update({
       where: { id },
-      data: {
-        target,
-        weightage,
-        description,
-      },
+      data: updateData,
     })
 
     const auditLogs = []
@@ -97,9 +212,28 @@ export async function PATCH(
         goalId: id,
         changedById: managerId,
         field: "target",
-        oldValue: String(goal.target),
-        newValue: String(target),
+        oldValue: goal.target === null ? "" : String(goal.target),
+        newValue: target === null ? "" : String(target),
         reason: "Manager edited goal target",
+      })
+    }
+
+    const oldDeadline = goal.deadline
+      ? goal.deadline.toISOString().split("T")[0]
+      : ""
+
+    const newDeadline = deadline
+      ? deadline.toISOString().split("T")[0]
+      : ""
+
+    if (oldDeadline !== newDeadline) {
+      auditLogs.push({
+        goalId: id,
+        changedById: managerId,
+        field: "deadline",
+        oldValue: oldDeadline,
+        newValue: newDeadline,
+        reason: "Manager edited goal deadline",
       })
     }
 
