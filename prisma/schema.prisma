@@ -63,6 +63,9 @@ model User {
   checkins   Checkin[]
   auditLogs  AuditLog[]
 
+  escalationsAsTarget    EscalationLog[] @relation("EscalationTarget")
+  escalationsAsNotified  EscalationLog[] @relation("EscalationNotified")
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -136,4 +139,37 @@ model Cycle {
   q4Start     DateTime
   isActive    Boolean  @default(false)
   createdAt   DateTime @default(now())
+}
+
+enum EscalationTrigger {
+  GOAL_NOT_SUBMITTED
+  GOAL_NOT_APPROVED
+  CHECKIN_NOT_COMPLETED
+}
+
+model EscalationRule {
+  id             String            @id @default(cuid())
+  name           String
+  triggerType    EscalationTrigger
+  daysThreshold  Int               // N days before escalating
+  isActive       Boolean           @default(true)
+  logs           EscalationLog[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+}
+
+model EscalationLog {
+  id             String         @id @default(cuid())
+  ruleId         String
+  rule           EscalationRule @relation(fields: [ruleId], references: [id])
+  targetUserId   String
+  targetUser     User           @relation("EscalationTarget", fields: [targetUserId], references: [id])
+  notifiedUserId String
+  notifiedUser   User           @relation("EscalationNotified", fields: [notifiedUserId], references: [id])
+  triggerType    EscalationTrigger
+  message        String
+  level          Int            // 1 = employee, 2 = manager, 3 = HR/Admin
+  isResolved     Boolean        @default(false)
+  resolvedAt     DateTime?
+  createdAt      DateTime       @default(now())
 }

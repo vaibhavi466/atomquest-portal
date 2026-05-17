@@ -158,6 +158,79 @@ export async function GET(req: NextRequest) {
       : "Timeline",
   }))
 
+  // ─── 7. Manager Effectiveness Dashboard ──────────────────────────────────────
+  const managers = await prisma.user.findMany({
+    where: { role: "MANAGER" },
+    include: {
+      reports: {
+        include: {
+          goals: {
+            where: { status: GoalStatus.LOCKED },
+            include: { checkins: true },
+          },
+        },
+      },
+    },
+  })
+
+  const managerEffectiveness = managers.map((mgr) => {
+    const totalReports = mgr.reports.length
+    const totalGoals = mgr.reports.reduce((s, r) => s + r.goals.length, 0)
+
+    // Check-in completion: how many Q1-Q4 slots are filled
+    const totalCheckinSlots = totalGoals * 4
+    const filledCheckins = mgr.reports.reduce(
+      (s, r) =>
+        s +
+        r.goals.reduce(
+          (gs, g) =>
+            gs + g.checkins.filter((c) => c.quarter !== "ANNUAL" && c.score !== null).length,
+          0
+        ),
+      0
+    )
+    const checkinRate =
+      totalCheckinSlots > 0
+        ? Math.round((filledCheckins / totalCheckinSlots) * 100)
+        : 0
+
+    // Avg team score
+    const allScores: number[] = []
+    mgr.reports.forEach((r) => {
+      r.goals.forEach((g) => {
+        g.checkins.forEach((c) => {
+          if (c.score !== null) allScores.push(c.score)
+        })
+      })
+    })
+    const avgTeamScore =
+      allScores.length > 0
+        ? Math.round(
+            (allScores.reduce((a, b) => a + b, 0) / allScores.length) * 10
+          ) / 10
+        : 0
+
+    // Pending approvals count
+    const pendingApprovals = mgr.reports.reduce(
+      (s, r) =>
+        s + r.goals.filter((g: any) => g.status === "SUBMITTED").length,
+      0
+    )
+
+    return {
+      managerId: mgr.id,
+      managerName: mgr.name,
+      department: mgr.department || "N/A",
+      totalReports,
+      totalGoals,
+      checkinRate,
+      avgTeamScore,
+      pendingApprovals,
+      filledCheckins,
+      totalCheckinSlots,
+    }
+  })
+
   return NextResponse.json({
     qoqTrend,
     thrustBreakdown,
@@ -165,6 +238,7 @@ export async function GET(req: NextRequest) {
     leaderboard,
     heatmap,
     uomDistribution,
+    managerEffectiveness,
     meta: {
       totalEmployees: users.length,
       totalGoals: users.reduce((s, u) => s + u.goals.length, 0),

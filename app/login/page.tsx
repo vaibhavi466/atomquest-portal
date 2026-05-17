@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { signIn as nextAuthSignIn } from "next-auth/react"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -14,6 +15,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const azureConfigured = process.env.NEXT_PUBLIC_AZURE_ENABLED === "true"
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -83,6 +85,36 @@ export default function LoginPage() {
             </form>
           </CardContent>
         </Card>
+        {/* Microsoft Sign-In Option */}
+        {azureConfigured && (
+          <>
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-200" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-white px-3 text-slate-400">or</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => nextAuthSignIn("microsoft-entra-id", { callbackUrl: "/" })}
+              className="w-full flex items-center justify-center gap-3 border border-slate-200
+                        rounded-lg px-4 py-2.5 text-sm font-medium text-slate-700
+                        hover:bg-slate-50 transition-colors"
+            >
+              {/* Microsoft logo SVG */}
+              <svg width="18" height="18" viewBox="0 0 21 21" fill="none">
+                <rect x="1"  y="1"  width="9" height="9" fill="#F25022"/>
+                <rect x="11" y="1"  width="9" height="9" fill="#7FBA00"/>
+                <rect x="1"  y="11" width="9" height="9" fill="#00A4EF"/>
+                <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
+              </svg>
+              Sign in with Microsoft
+            </button>
+          </>
+        )}
 
         {/* Demo credentials for judges */}
         <Card className="border-dashed">

@@ -3,6 +3,7 @@ import { auth } from "@/app/api/auth/[...nextauth]/route"
 import { prisma } from "@/lib/prisma"
 import { validateGoalSet } from "@/lib/calculations"
 import { GoalStatus } from "@prisma/client"
+import { notify } from "@/lib/notifications"
 
 // POST /api/goals/submit — submit all DRAFT/RETURNED goals for approval
 export async function POST(req: NextRequest) {
@@ -37,6 +38,23 @@ export async function POST(req: NextRequest) {
     },
     data: { status: GoalStatus.SUBMITTED },
   })
+
+  // Notify manager
+  const employee = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { manager: { select: { name: true, email: true } } },
+  })
+
+  if (employee?.manager) {
+    await notify({
+      event: "goal_submitted",
+      toEmail: employee.manager.email,
+      toName: employee.manager.name,
+      employeeName: employee.name,
+      goalCount: goals.length,
+      deepLink: "/manager/team",
+    })
+  }
 
   return NextResponse.json({ success: true, submitted: goals.length })
 }

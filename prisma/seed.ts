@@ -1,6 +1,7 @@
 import { PrismaClient, Role, UoMType, GoalStatus, CheckinStatus, Quarter } from "@prisma/client"
 import bcrypt from "bcryptjs"
 
+
 const prisma = new PrismaClient()
 
 async function main() {
@@ -250,6 +251,41 @@ async function main() {
       },
     })
   }
+
+  // Seed default escalation rules
+  const escalationRules = [
+    {
+      id: "rule-goal-submission",
+      name: "Goal Not Submitted After Cycle Open",
+      triggerType: "GOAL_NOT_SUBMITTED" as const,
+      daysThreshold: 7,
+      isActive: true,
+    },
+    {
+      id: "rule-goal-approval",
+      name: "Goal Not Approved by Manager",
+      triggerType: "GOAL_NOT_APPROVED" as const,
+      daysThreshold: 5,
+      isActive: true,
+    },
+    {
+      id: "rule-checkin-completion",
+      name: "Quarterly Check-in Not Completed",
+      triggerType: "CHECKIN_NOT_COMPLETED" as const,
+      daysThreshold: 10,
+      isActive: true,
+    },
+  ]
+
+  for (const rule of escalationRules) {
+    await prisma.escalationRule.upsert({
+      where: { id: rule.id },
+      update: {},
+      create: rule,
+    })
+  }
+
+  console.log("✅ Escalation rules seeded")
 
 
   console.log("✅ Seeding complete!")

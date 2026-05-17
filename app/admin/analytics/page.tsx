@@ -104,6 +104,7 @@ export default function AnalyticsPage() {
     leaderboard,
     heatmap,
     uomDistribution,
+    managerEffectiveness,
     meta,
   } = data
 
@@ -580,6 +581,151 @@ export default function AnalyticsPage() {
           </ResponsiveContainer>
         </CardContent>
       </Card>
+
+
+      {/* ── Row 5: Manager Effectiveness ── */}
+      {managerEffectiveness && managerEffectiveness.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Users size={16} className="text-purple-500" />
+              <CardTitle className="text-sm font-medium text-slate-700">
+                Manager Effectiveness Dashboard
+              </CardTitle>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Check-in completion rates and team performance across all L1 managers
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {managerEffectiveness.map((mgr: any) => (
+                <div
+                  key={mgr.managerId}
+                  className="rounded-xl border border-slate-200 p-4"
+                >
+                  {/* Manager header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-full bg-purple-100 flex items-center justify-center">
+                        <span className="text-xs font-bold text-purple-700">
+                          {mgr.managerName.slice(0, 2).toUpperCase()}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-900 text-sm">
+                          {mgr.managerName}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {mgr.totalReports} direct report
+                          {mgr.totalReports !== 1 ? "s" : ""} ·{" "}
+                          {mgr.totalGoals} approved goals
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {mgr.pendingApprovals > 0 && (
+                        <span className="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-medium">
+                          {mgr.pendingApprovals} pending approval
+                          {mgr.pendingApprovals !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                      {mgr.avgTeamScore > 0 && (
+                        <ScoreBadge score={mgr.avgTeamScore} size="sm" showLabel />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Metrics row */}
+                  <div className="grid grid-cols-3 gap-4">
+                    {/* Check-in completion rate */}
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="text-xs text-slate-500 mb-1">
+                        Check-in Completion
+                      </p>
+                      <p
+                        className={`text-xl font-semibold ${
+                          mgr.checkinRate >= 80
+                            ? "text-green-600"
+                            : mgr.checkinRate >= 50
+                            ? "text-amber-600"
+                            : "text-red-600"
+                        }`}
+                      >
+                        {mgr.checkinRate}%
+                      </p>
+                      <div className="mt-2 w-full bg-slate-200 rounded-full h-1.5">
+                        <div
+                          className={`h-1.5 rounded-full ${
+                            mgr.checkinRate >= 80
+                              ? "bg-green-500"
+                              : mgr.checkinRate >= 50
+                              ? "bg-amber-500"
+                              : "bg-red-400"
+                          }`}
+                          style={{ width: `${mgr.checkinRate}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {mgr.filledCheckins} of {mgr.totalCheckinSlots} slots filled
+                      </p>
+                    </div>
+
+                    {/* Avg team score */}
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="text-xs text-slate-500 mb-1">
+                        Avg Team Score
+                      </p>
+                      {mgr.avgTeamScore > 0 ? (
+                        <div className="flex items-center gap-2 mt-1">
+                          <ProgressRing
+                            score={mgr.avgTeamScore}
+                            size={48}
+                            strokeWidth={4}
+                          />
+                          <div>
+                            <p className="text-xs text-slate-500">
+                              Across all check-ins
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-slate-400 mt-2">
+                          No check-ins yet
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Pending workload */}
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="text-xs text-slate-500 mb-1">
+                        Pending Approvals
+                      </p>
+                      <p
+                        className={`text-xl font-semibold ${
+                          mgr.pendingApprovals === 0
+                            ? "text-green-600"
+                            : mgr.pendingApprovals <= 2
+                            ? "text-amber-600"
+                            : "text-red-600"
+                        }`}
+                      >
+                        {mgr.pendingApprovals}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {mgr.pendingApprovals === 0
+                          ? "All caught up ✓"
+                          : "Goals awaiting review"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
 
     </div>
   )

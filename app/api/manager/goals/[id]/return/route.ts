@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/app/api/auth/[...nextauth]/route"
 import { prisma } from "@/lib/prisma"
 import { GoalStatus,Role } from "@prisma/client"
+import { notify } from "@/lib/notifications"
 
 // POST /api/manager/goals/:id/return
 export async function POST(
@@ -63,6 +64,20 @@ export async function POST(
       data: {
         status: GoalStatus.RETURNED,
       },
+    })
+
+    const manager = await prisma.user.findUnique({
+      where: { id: managerId },
+      select: { name: true },
+    })
+
+    await notify({
+      event: "goal_returned",
+      toEmail: goal.user.email,
+      toName: goal.user.name,
+      managerName: manager?.name,
+      reason: body.reason,
+      deepLink: "/employee/goals",
     })
 
     await prisma.auditLog.create({
