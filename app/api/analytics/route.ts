@@ -135,7 +135,7 @@ export async function GET(req: NextRequest) {
           : null
     })
     return {
-      name: user.name.split(" ")[0], // First name only for chart readability
+      name: user.name?.split(" ")[0] || user.email.split("@")[0], // First name only for chart readability
       ...quarterData,
     }
   })

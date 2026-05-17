@@ -48,11 +48,12 @@ enum Quarter {
 
 model User {
   id         String   @id @default(cuid())
-  name       String
+  name       String?
   email      String   @unique
-  password   String
+  password   String?
   role       Role     @default(EMPLOYEE)
   department String?
+  image      String?
 
   // Self-referential: employee reports to manager
   managerId  String?
@@ -63,12 +64,52 @@ model User {
   checkins   Checkin[]
   auditLogs  AuditLog[]
 
+  accounts      Account[]
+  sessions      Session[]
+
   escalationsAsTarget    EscalationLog[] @relation("EscalationTarget")
   escalationsAsNotified  EscalationLog[] @relation("EscalationNotified")
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+
 
 model Goal {
   id           String     @id @default(cuid())

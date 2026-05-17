@@ -49,8 +49,14 @@ export async function POST(req: NextRequest) {
     await notify({
       event: "goal_submitted",
       toEmail: employee.manager.email,
-      toName: employee.manager.name,
-      employeeName: employee.name,
+      toName:
+          employee.manager.name?.trim() ||
+          employee.manager.email.split("@")[0] ||
+          "Manager",
+      employeeName:
+        employee.name?.trim() ||
+        employee.email.split("@")[0] ||
+        "Employee",
       goalCount: goals.length,
       deepLink: "/manager/team",
     })

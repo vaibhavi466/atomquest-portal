@@ -66,14 +66,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const manager = await prisma.user.findUnique({
     where: { id: managerId },
-    select: { name: true },
+    select: { name: true, email: true },
   })
 
   await notify({
     event: "goal_approved",
     toEmail: goal.user.email,
-    toName: goal.user.name,
-    managerName: manager?.name,
+    toName:
+    goal.user.name?.trim() ||
+    goal.user.email.split("@")[0] ||
+    "Employee",
+  managerName:
+    manager?.name?.trim() ||
+    manager?.email?.split("@")[0] ||
+    "Manager",
     deepLink: "/employee/goals",
   })
 

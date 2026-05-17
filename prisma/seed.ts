@@ -290,10 +290,6 @@ async function main() {
     ],
   })
 
-  /**
-   * 8. Seed default escalation rules.
-   * update is not empty so reseeding refreshes rules safely.
-   */
   const escalationRules = [
     {
       id: "rule-goal-submission",
@@ -331,21 +327,12 @@ async function main() {
     })
   }
 
-  console.log("✅ Demo users reset")
-  console.log("✅ Active cycle opened until 30 June 2026")
-  console.log("✅ Demo goals and check-ins reseeded")
-  console.log("✅ Escalation rules seeded")
-  console.log("✅ Seeding complete!")
-
-  console.log("\n📋 Demo Credentials:")
-  console.log("  Employee → employee@demo.com / Demo@123")
-  console.log("  Manager  → manager@demo.com  / Demo@123")
-  console.log("  Admin    → admin@demo.com    / Demo@123")
+  console.log("Database seeding completed.")
 }
 
 main()
   .catch((error) => {
-    console.error("❌ Seed failed:", error)
+    console.error("Seed failed:", error)
     process.exit(1)
   })
   .finally(async () => {
